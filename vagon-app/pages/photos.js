@@ -1,11 +1,12 @@
+// photos.js
 import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { Box, Container, Heading, Image, Text, SimpleGrid, AspectRatio, Spinner, Flex } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 
 async function fetchImages() {
-  const res = await fetch('/api/photos');
-  if (!res.ok) throw new Error('Помилка при завантаженні фото');
-  return res.json();
+  const response = await axios.get('/api/photos');
+  return response.data;
 }
 
 export default function PhotosPage() {

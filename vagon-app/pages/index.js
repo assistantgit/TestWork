@@ -1,9 +1,11 @@
+// index.js
 import { useState } from 'react';
 import {
   useQuery,
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
+import axios from 'axios';
 import {
   Box,
   Input,
@@ -24,9 +26,8 @@ import {
 } from '@chakra-ui/react';
 
 async function fetchWagons() {
-  const res = await fetch('/api/wagons');
-  if (!res.ok) throw new Error('Не вдалося отримати дані');
-  return res.json();
+  const response = await axios.get('/api/wagons');
+  return response.data;
 }
 
 async function uploadPhoto({ vagonNumber, file }) {
@@ -34,12 +35,8 @@ async function uploadPhoto({ vagonNumber, file }) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('vagonNumber', vagonNumber);
-  const response = await fetch('/api/upload', {
-    method: 'POST',
-    body: formData,
-  });
-  if (!response.ok) throw new Error('Помилка при завантаженні');
-  return response;
+  const response = await axios.post('/api/upload', formData);
+  return response.data;
 }
 
 export default function Home() {
