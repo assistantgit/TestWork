@@ -1,4 +1,3 @@
-// index.js
 import { useState } from 'react';
 import {
   useQuery,

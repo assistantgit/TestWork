@@ -1,4 +1,3 @@
-// photos.js
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { Box, Container, Heading, Image, Text, SimpleGrid, AspectRatio, Spinner, Flex } from '@chakra-ui/react';
