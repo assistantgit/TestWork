@@ -1,8 +1,9 @@
-// pages/index.js
 import { useState } from 'react';
-import axios from 'axios';
-import { useRouter } from 'next/router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {
   Box,
   Input,
@@ -18,60 +19,43 @@ import {
   Text,
   useToast,
   Image,
+  Spinner,
+  Flex,
 } from '@chakra-ui/react';
-import fs from 'fs';
-import path from 'path';
 
-export async function getServerSideProps() {
-  try {
-    const response = await axios.get('https://rwl.artport.pro/commercialAgent/hs/CarrWorkApp/VagonInfo');
-    const wagons = Array.isArray(response.data?.Vagons) ? response.data.Vagons : [];
-
-    const uploadDir = path.join(process.cwd(), 'public/uploads');
-    const existingPhotos = fs.existsSync(uploadDir)
-      ? fs.readdirSync(uploadDir).reduce((acc, file) => {
-          const vagon = file.split('.')[0];
-          acc[vagon] = `/uploads/${file}`;
-          return acc;
-        }, {})
-      : {};
-
-    return { props: { wagons, existingPhotos } };
-  } catch (error) {
-    console.error('Fetch error:', error);
-    return { props: { wagons: [], existingPhotos: {} } };
-  }
+async function fetchWagons() {
+  const res = await fetch('/api/wagons');
+  if (!res.ok) throw new Error('Не вдалося отримати дані');
+  return res.json();
 }
 
 async function uploadPhoto({ vagonNumber, file }) {
   if (!file) return;
-
   const formData = new FormData();
   formData.append('file', file);
   formData.append('vagonNumber', vagonNumber);
-
   const response = await fetch('/api/upload', {
     method: 'POST',
     body: formData,
   });
-
-  if (!response.ok) {
-    throw new Error('Помилка при завантаженні');
-  }
-
+  if (!response.ok) throw new Error('Помилка при завантаженні');
   return response;
 }
 
-export default function Home({ wagons, existingPhotos = {} }) {
+export default function Home() {
   const [search, setSearch] = useState('');
   const [sortField, setSortField] = useState('VagonNumber');
-  const router = useRouter();
   const toast = useToast();
   const queryClient = useQueryClient();
 
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['wagons'],
+    queryFn: fetchWagons,
+  });
+
   const uploadMutation = useMutation({
     mutationFn: uploadPhoto,
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       toast({
         title: 'Фото завантажено',
         description: `Фото для вагона ${variables.vagonNumber} успішно збережено`,
@@ -79,11 +63,9 @@ export default function Home({ wagons, existingPhotos = {} }) {
         duration: 3000,
         isClosable: true,
       });
-      // Invalidate cache and trigger page reload
-      queryClient.invalidateQueries();
-      router.reload();
+      queryClient.invalidateQueries(['wagons']);
     },
-    onError: (error, variables) => {
+    onError: () => {
       toast({
         title: 'Помилка',
         description: 'Не вдалося завантажити фото',
@@ -91,14 +73,14 @@ export default function Home({ wagons, existingPhotos = {} }) {
         duration: 3000,
         isClosable: true,
       });
-      console.error('Upload failed:', error);
     },
   });
 
-  // Always work with array
-  const safeWagons = Array.isArray(wagons) ? wagons : [];
+  if (isError) return <Text color="red.500">Помилка при отриманні даних</Text>;
 
-  const filteredWagons = safeWagons
+  const { wagons, existingPhotos } = data || { wagons: [], existingPhotos: {} };
+
+  const filteredWagons = wagons
     .filter((wagon) => wagon.VagonNumber.toString().includes(search))
     .sort((a, b) => {
       if (a[sortField] < b[sortField]) return -1;
@@ -127,8 +109,12 @@ export default function Home({ wagons, existingPhotos = {} }) {
           <option value="OwnerName">Власник</option>
         </Select>
       </Box>
-      
-      {filteredWagons.length === 0 ? (
+
+      {isLoading ? (
+        <Flex justify="center" align="center" minH="calc(100vh - 200px)">
+          <Spinner size="xl" />
+        </Flex>
+      ) : filteredWagons.length === 0 ? (
         <Text>Вагони не знайдено</Text>
       ) : (
         <Table variant="striped" colorScheme="gray">
@@ -146,7 +132,6 @@ export default function Home({ wagons, existingPhotos = {} }) {
             {filteredWagons.map((wagon) => {
               const photoPath = existingPhotos[wagon.VagonNumber];
               const hasPhoto = !!photoPath;
-
               return (
                 <Tr key={wagon.VagonNumber}>
                   <Td fontWeight="bold">{wagon.VagonNumber}</Td>
@@ -157,7 +142,9 @@ export default function Home({ wagons, existingPhotos = {} }) {
                   <Td>
                     {hasPhoto ? (
                       <Box>
-                        <Text fontSize="sm" color="green.600">Фото є</Text>
+                        <Text fontSize="sm" color="green.600">
+                          Фото є
+                        </Text>
                         <Image
                           src={photoPath}
                           alt={`Фото вагона ${wagon.VagonNumber}`}
@@ -180,9 +167,12 @@ export default function Home({ wagons, existingPhotos = {} }) {
                         disabled={uploadMutation.isPending}
                       />
                     )}
-                    {uploadMutation.isPending && uploadMutation.variables.vagonNumber === wagon.VagonNumber && (
-                      <Text fontSize="sm" color="blue.500">Завантаження...</Text>
-                    )}
+                    {uploadMutation.isPending &&
+                      uploadMutation.variables?.vagonNumber === wagon.VagonNumber && (
+                        <Text fontSize="sm" color="blue.500">
+                          Завантаження...
+                        </Text>
+                      )}
                   </Td>
                 </Tr>
               );
